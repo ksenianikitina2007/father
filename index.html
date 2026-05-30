@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Проверка: Папа Дима, уровень 47</title>
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+body {
+    background: #0a0c12;
+    color: #eef;
+    overflow: hidden;
+    font-family: system-ui, 'Segoe UI', monospace;
+    touch-action: manipulation;
+}
+.screen {
+    display: none;
+    height: 100vh;
+    width: 100vw;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    padding: 20px;
+    text-align: center;
+    position: relative;
+    z-index: 10;
+}
+.active {
+    display: flex;
+}
+.card {
+    background: #11161f;
+    border: 1px solid #2e3a4a;
+    border-radius: 32px;
+    padding: 28px 20px;
+    width: 100%;
+    max-width: 420px;
+    backdrop-filter: blur(2px);
+}
+button {
+    width: 100%;
+    padding: 14px;
+    margin-top: 16px;
+    border: none;
+    border-radius: 60px;
+    background: #2b5f9e;
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+    transition: 0.08s linear;
+    cursor: pointer;
+}
+button:active {
+    transform: scale(0.97);
+}
+#feedback {
+    min-height: 48px;
+    margin: 12px 0;
+}
+/* Тир */
+#world {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 30% 20%, #1e2a2a, #020405);
+    border-radius: 28px;
+    overflow: hidden;
+    cursor: crosshair;
+    touch-action: none;
+}
+#target {
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    border-radius: 50%;
+    background: radial-gradient(red 0 15%, white 15% 30%, red 30% 45%, white 45% 60%, red 60%);
+    box-shadow: 0 0 0 2px #440000, 0 0 0 5px #7a2e2e;
+    transition: left 0.02s linear, top 0.02s linear;
+    cursor: pointer;
+    z-index: 20;
+}
+#zone {
+    position: absolute;
+    right: 18px;
+    bottom: 80px;
+    width: 130px;
+    height: 130px;
+    border: 3px dashed #00ffaa;
+    border-radius: 24px;
+    background: rgba(0, 255, 170, 0.08);
+    pointer-events: none;
+    z-index: 5;
+}
+/* Дырки от пуль (под мишенью) */
+.bullet-hole {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #050505;
+    border: 1px solid #7a7f8c;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 15;
+    opacity: 0.9;
+}
+/* Контейнер для осколков (падающие многоугольники) */
+.shard-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 300;
+    overflow: hidden;
+}
+.shard {
+    position: absolute;
+    will-change: transform;
+    animation: fallShard 1.4s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+    background-size: cover;
+    background-repeat: no-repeat;
+}
+@keyframes fallShard {
+    0% {
+        transform: translate(0, 0) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(var(--tx, 0px), var(--ty, 700px)) rotate(var(--rot, 30deg));
+        opacity: 0;
+    }
+}
+/* Чёрный экран после осколков */
+.blackout {
+    position: fixed;
+    inset: 0;
+    background: black;
+    z-index: 400;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s;
+}
+.blackout.active {
+    opacity: 1;
+    pointer-events: all;
+}
+/* Прогресс-бар */
+.progress {
+    width: 85%;
+    max-width: 380px;
+    height: 16px;
+    background: #232a33;
+    border-radius: 40px;
+    overflow: hidden;
+    margin-top: 28px;
+}
+.bar {
+    height: 100%;
+    width: 0%;
+    background: #3c8f40;
+    transition: width 0.1s linear;
+}
+#photo {
+    width: 80%;
+    max-width: 320px;
+    border-radius: 32px;
+    opacity: 0;
+    transform: scale(0.85);
+    transition: 1.2s cubic-bezier(0.2, 0.9, 0.4, 1.1);
+    margin: 20px 0;
+    border: 3px solid #ffcc77;
+}
+#photo.show {
+    opacity: 1;
+    transform: scale(1);
+}
+#s5 p {
+    background: #11161fcc;
+    backdrop-filter: blur(12px);
+    border-radius: 48px;
+    padding: 14px 20px;
+    font-size: 1.25rem;
+}
+@media (max-width: 550px) {
+    #target { width: 75px; height: 75px; }
+    #zone { width: 110px; height: 110px; bottom: 60px; right: 12px; }
+}
+</style>
+</head>
+<body>
+
+<audio id="music" src="music.mp3" loop preload="auto"></audio>
+<audio id="gun" src="gunshot.mp3" preload="auto"></audio>
+<audio id="glass" src="glass.mp3" preload="auto"></audio>
+
+<div id="s1" class="screen active">
+    <div class="card">
+        <h2 style="font-size: 1.7rem; border-bottom: 1px solid #2e4a6e; display: inline-block; padding-bottom: 6px;">⚙️ КВАЛИФИКАЦИОННОЕ ИСПЫТАНИЕ</h2>
+        <div style="background: #0c111c; border-radius: 24px; padding: 18px; margin: 22px 0; text-align: left; border: 1px solid #2e4a6e;">
+            <p style="font-size: 1.2rem; margin: 8px 0;">👤 <strong>Испытуемый:</strong> Папа Дима</p>
+            <p style="font-size: 1.2rem; margin: 8px 0;">📅 <strong>Дата создания:</strong> 1979</p>
+            <p style="font-size: 1.6rem; margin: 12px 0; color: #ffaa55;">⬤ <strong>Уровень:</strong> 47</p>
+        </div>
+        <button onclick="startTest()">▶ НАЧАТЬ ТЕСТИРОВАНИЕ</button>
+    </div>
+</div>
+
+<div id="s2" class="screen"><div class="card" id="quiz"></div></div>
+<div id="s3" class="screen">
+    <h3 style="background: #00000088; padding: 5px 12px; border-radius: 60px; font-size: 0.9rem;">🔫 РЕЖИМ СТАБИЛИЗАЦИИ</h3>
+    <div id="world"><div id="zone"></div><div id="target"></div></div>
+    <p style="margin-top: 8px; font-size: 12px; background: #00000099; padding: 5px 12px; border-radius: 20px;">выстрел — любая область | отскок мишени всегда на радиус</p>
+</div>
+<div id="s4" class="screen"><h2 id="txt">📡 ОБРАБОТКА РЕЗУЛЬТАТОВ...</h2><div class="progress"><div class="bar" id="bar"></div></div></div>
+<div id="s5" class="screen">
+    <h1 style="font-size: 2.4rem;">✅ ПРОВЕРКА ПРОЙДЕНА</h1>
+    <h2 style="margin: 12px 0;">С ДНЁМ РОЖДЕНИЯ, ПАПА ДИМА</h2>
+    <img id="photo" src="photo.jpg" alt="Папа Дима">
+    <p>⭐ ЛУЧШИЙ ПАПА В МИРЕ ⭐<br><br>Мы тебя очень любим<br>и ценим каждый день</p>
+</div>
+
+<script>
+// ---------- ВОПРОСЫ С ПЕРЕМЕШИВАНИЕМ ----------
+const rawQuestions = [
+    { q: "Ключевая характеристика испытуемого?", answers: ["Умный", "Добрый", "Красивый", "Всё перечисленное"], correct: 3 },
+    { q: "Частота абсолютной правоты?", answers: ["Иногда", "Часто", "Редко", "Всегда"], correct: 3 },
+    { q: "Уровень эффективности?", answers: ["Высокий", "Очень высокий", "Максимальный", "Вне шкалы"], correct: 3 }
+];
+
+function shuffleAnswers(question) {
+    let indices = question.answers.map((_, idx) => idx);
+    for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    const shuffledAnswers = indices.map(i => question.answers[i]);
+    const newCorrectIndex = indices.findIndex(i => i === question.correct);
+    return { answers: shuffledAnswers, correctIndex: newCorrectIndex };
+}
+
+let currentQuestions = [];
+let qIndex = 0;
+let canAnswer = true;
+
+function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+}
+
+function startTest() {
+    const music = document.getElementById('music');
+    music.volume = 0.45;
+    music.play().catch(e => console.log("автоплей ограничен"));
+    initShuffledQuestions();
+    qIndex = 0;
+    canAnswer = true;
+    showScreen('s2');
+    renderQuestion();
+}
+
+function initShuffledQuestions() {
+    currentQuestions = rawQuestions.map(q => {
+        const { answers, correctIndex } = shuffleAnswers(q);
+        return { q: q.q, answers, correct: correctIndex };
+    });
+}
+
+function renderQuestion() {
+    const q = currentQuestions[qIndex];
+    const container = document.getElementById('quiz');
+    container.innerHTML = `<h3>❓ ${q.q}</h3><div id="feedback"></div>`;
+    q.answers.forEach((ans, idx) => {
+        const btn = document.createElement('button');
+        btn.innerText = ans;
+        btn.style.background = "#1f2e3e";
+        btn.onclick = () => handleAnswer(btn, idx);
+        container.appendChild(btn);
+    });
+}
+
+function handleAnswer(btn, selected) {
+    if (!canAnswer) return;
+    canAnswer = false;
+    const q = currentQuestions[qIndex];
+    const fb = document.getElementById('feedback');
+    if (selected === q.correct) {
+        btn.style.background = "#2a7a3a";
+        fb.innerHTML = "✓ Верно.";
+        setTimeout(() => {
+            qIndex++;
+            if (qIndex >= currentQuestions.length) {
+                showScreen('s3');
+                initShootingRange();
+            } else {
+                renderQuestion();
+            }
+            canAnswer = true;
+        }, 700);
+    } else {
+        btn.style.background = "#a0342a";
+        fb.innerHTML = "✖ Неверно. Попробуй ещё раз.";
+        setTimeout(() => {
+            btn.style.background = "#1f2e3e";
+            canAnswer = true;
+        }, 800);
+    }
+}
+
+// ---------- СТРЕЛЬБА ----------
+let targetFixed = false;
+let alreadyBroken = false;
+let worldDiv, targetElem, zoneElem;
+const TARGET_RADIUS_PX = 45;
+
+function initShootingRange() {
+    worldDiv = document.getElementById('world');
+    targetElem = document.getElementById('target');
+    zoneElem = document.getElementById('zone');
+    targetFixed = false;
+    alreadyBroken = false;
+    let startLeft = 5 + Math.random() * 55;
+    let startTop = 10 + Math.random() * 60;
+    targetElem.style.left = startLeft + "%";
+    targetElem.style.top = startTop + "%";
+    targetElem.style.boxShadow = "0 0 0 2px #440000, 0 0 0 5px #7a2e2e";
+    document.querySelectorAll('.bullet-hole').forEach(h => h.remove());
+    worldDiv.removeEventListener('click', worldClickHandler);
+    worldDiv.removeEventListener('touchstart', touchStartHandler);
+    worldDiv.addEventListener('click', worldClickHandler);
+    worldDiv.addEventListener('touchstart', touchStartHandler, { passive: false });
+}
+
+function applyFixedBounce(clientX, clientY) {
+    const rect = targetElem.getBoundingClientRect();
+    const centerX = rect.left + rect.width/2;
+    const centerY = rect.top + rect.height/2;
+    let dx = centerX - clientX;
+    let dy = centerY - clientY;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.001) { dx = -0.5 + Math.random(); dy = -0.5 + Math.random(); }
+    else { dx /= len; dy /= len; }
+    const offset = TARGET_RADIUS_PX * 1.1;
+    const moveX = dx * offset;
+    const moveY = dy * offset;
+    const parent = worldDiv.getBoundingClientRect();
+    let newLeft = ((rect.left + moveX) - parent.left) / parent.width * 100;
+    let newTop = ((rect.top + moveY) - parent.top) / parent.height * 100;
+    newLeft = Math.min(Math.max(newLeft, 2), 94);
+    newTop = Math.min(Math.max(newTop, 2), 94);
+    targetElem.style.left = newLeft + "%";
+    targetElem.style.top = newTop + "%";
+    targetElem.style.transform = "scale(0.94)";
+    setTimeout(() => { if(targetElem) targetElem.style.transform = ""; }, 100);
+}
+
+function processShot(clientX, clientY) {
+    const gun = document.getElementById('gun');
+    if (gun) { gun.currentTime = 0; gun.play().catch(e=>console.log); }
+
+    const worldRect = worldDiv.getBoundingClientRect();
+    const relX = clientX - worldRect.left;
+    const relY = clientY - worldRect.top;
+    if (relX >= 0 && relX <= worldRect.width && relY >= 0 && relY <= worldRect.height) {
+        const hole = document.createElement('div');
+        hole.className = 'bullet-hole';
+        hole.style.left = relX + 'px';
+        hole.style.top = relY + 'px';
+        worldDiv.appendChild(hole);
+    }
+
+    const targetRect = targetElem.getBoundingClientRect();
+    const isHit = (clientX >= targetRect.left && clientX <= targetRect.right && clientY >= targetRect.top && clientY <= targetRect.bottom);
+    if (!isHit) return;
+
+    if (targetFixed) {
+        if (!alreadyBroken) finalBreakEffect();
+        return;
+    }
+
+    applyFixedBounce(clientX, clientY);
+    setTimeout(() => {
+        if (targetFixed || alreadyBroken) return;
+        const newRect = targetElem.getBoundingClientRect();
+        const zoneRect = zoneElem.getBoundingClientRect();
+        const overlap = !(newRect.right < zoneRect.left || newRect.left > zoneRect.right || newRect.bottom < zoneRect.top || newRect.top > zoneRect.bottom);
+        if (overlap) {
+            targetFixed = true;
+            targetElem.style.boxShadow = "0 0 0 3px #00ffaa, 0 0 0 8px #229977";
+        }
+    }, 30);
+}
+
+function worldClickHandler(e) { processShot(e.clientX, e.clientY); }
+function touchStartHandler(e) { e.preventDefault(); processShot(e.touches[0].clientX, e.touches[0].clientY); }
+
+// ---------- ГЛАВНЫЙ ЭФФЕКТ: МНОГОУГОЛЬНЫЕ ОСКОЛКИ, ПАДАЮЩИЕ ПО ОЧЕРЕДИ ----------
+async function finalBreakEffect() {
+    if (alreadyBroken) return;
+    alreadyBroken = true;
+    const glassSound = document.getElementById('glass');
+    if (glassSound) { glassSound.currentTime = 0; glassSound.play().catch(e=>console.log); }
+
+    // Захватываем скриншот текущего содержимого body (виден экран s3)
+    const element = document.body;
+    // Создаём canvas для снимка
+    const canvas = document.createElement('canvas');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    const ctx = canvas.getContext('2d');
+
+    // Используем html2canvas или fallback – но чтобы избежать зависания, сделаем простой захват DOM как изображение через стороннюю библиотеку?
+    // Однако мы договорились без внешних библиотек, но для многоугольников нужен именно снимок. Используем встроенную функцию, но она может быть медленной,
+    // однако при количестве осколков ~25-30 и одном снимке – нормально. Встроенного аналога html2canvas нет, поэтому используем ту же библиотеку, но лёгкую.
+    // Чтобы гарантированно не зависло, используем библиотеку html2canvas из CDN (мы уже подключили в head).
+    // Но в этом ответе мы её подключим, а в коде ниже аккуратно применим.
+    // (Библиотека уже загружена в head, используем её)
+    if (typeof html2canvas === 'undefined') {
+        console.warn("html2canvas не загружена, запускаем запасной переход");
+        startLoadSequence();
+        return;
+    }
+
+    try {
+        const screenshotCanvas = await html2canvas(element, { scale: 0.8, backgroundColor: null, useCORS: false, logging: false });
+        const fullImage = screenshotCanvas.toDataURL();
+
+        // Генерируем многоугольные осколки (случайные треугольники/четырехугольники, покрывающие весь экран)
+        const shardCount = 32; // количество осколков
+        const pieces = [];
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // Создаём случайные точки для разбиения (алгоритм случайных многоугольников, покрывающих область)
+        // Для простоты создадим набор непересекающихся? Но можно и пересекающиеся – визуально интересно.
+        // Сгенерируем многоугольники методом случайных точек и триангуляции. Упростим: каждый осколок – это случайный треугольник или четырёхугольник.
+        for (let i = 0; i < shardCount; i++) {
+            // Случайный многоугольник (3-5 вершин)
+            const vertexCount = 3 + Math.floor(Math.random() * 3);
+            const points = [];
+            for (let v = 0; v < vertexCount; v++) {
+                points.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height
+                });
+            }
+            // Находим bounding box
+            let minX = width, minY = height, maxX = 0, maxY = 0;
+            points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
+            const boxW = maxX - minX;
+            const boxH = maxY - minY;
+            if (boxW < 5 || boxH < 5) continue;
+
+            // Создаём элемент-осколок
+            const shard = document.createElement('div');
+            shard.className = 'shard';
+            shard.style.left = minX + 'px';
+            shard.style.top = minY + 'px';
+            shard.style.width = boxW + 'px';
+            shard.style.height = boxH + 'px';
+
+            // Формируем clip-path из точек относительно bounding box
+            const relPoints = points.map(p => `${((p.x - minX) / boxW) * 100}% ${((p.y - minY) / boxH) * 100}%`);
+            shard.style.clipPath = `polygon(${relPoints.join(', ')})`;
+            shard.style.backgroundImage = `url(${fullImage})`;
+            shard.style.backgroundPosition = `-${minX}px -${minY}px`;
+            shard.style.backgroundSize = `${width}px ${height}px`;
+
+            // Случайное направление падения
+            const tx = (Math.random() - 0.5) * 150;
+            const ty = 500 + Math.random() * 400;
+            const rot = (Math.random() - 0.5) * 60;
+            shard.style.setProperty('--tx', tx + 'px');
+            shard.style.setProperty('--ty', ty + 'px');
+            shard.style.setProperty('--rot', rot + 'deg');
+            shard.style.animationDelay = (Math.random() * 0.7) + 's';
+            pieces.push(shard);
+        }
+
+        // Если не удалось создать ни одного осколка (маловероятно), делаем фоллбек
+        if (pieces.length === 0) {
+            startLoadSequence();
+            return;
+        }
+
+        const container = document.createElement('div');
+        container.className = 'shard-overlay';
+        pieces.forEach(p => container.appendChild(p));
+        document.body.appendChild(container);
+
+        // Скрываем текущий активный экран (s3)
+        const s3 = document.getElementById('s3');
+        s3.style.opacity = '0';
+        s3.style.pointerEvents = 'none';
+
+        // Ждём окончания анимации самого долгого осколка (макс задержка + длительность)
+        const maxDelay = 0.7;
+        const animDuration = 1.4;
+        await new Promise(r => setTimeout(r, (maxDelay + animDuration) * 1000 + 200));
+
+        container.remove();
+
+        // Чёрный экран на 1.5 секунды
+        const blackDiv = document.createElement('div');
+        blackDiv.className = 'blackout active';
+        document.body.appendChild(blackDiv);
+        await new Promise(r => setTimeout(r, 1500));
+        blackDiv.remove();
+
+        s3.style.opacity = '';
+        s3.style.pointerEvents = '';
+
+        // Запускаем медленную загрузку
+        startLoadSequence();
+
+    } catch (err) {
+        console.error("Ошибка при создании осколков", err);
+        startLoadSequence();
+    }
+}
+
+// ---------- МЕДЛЕННАЯ ЗАГРУЗКА (5-6 секунд) ----------
+function startLoadSequence() {
+    showScreen('s4');
+    let percent = 0;
+    const bar = document.getElementById('bar');
+    const txtEl = document.getElementById('txt');
+    const stages = ["⚙️ Верификация данных...", "📊 Анализ 47 уровня...", "🎁 Подготовка поздравления...", "✨ Завершающий отчёт..."];
+    let stepIdx = 0;
+    const interval = setInterval(() => {
+        percent += 0.65;
+        if (percent > 100) percent = 100;
+        bar.style.width = percent + "%";
+        if (percent >= 18 && stepIdx === 0) { txtEl.innerText = stages[0]; stepIdx++; }
+        if (percent >= 38 && stepIdx === 1) { txtEl.innerText = stages[1]; stepIdx++; }
+        if (percent >= 60 && stepIdx === 2) { txtEl.innerText = stages[2]; stepIdx++; }
+        if (percent >= 82 && stepIdx === 3) { txtEl.innerText = stages[3]; stepIdx++; }
+        if (percent >= 100) {
+            clearInterval(interval);
+            showScreen('s5');
+            setTimeout(() => document.getElementById('photo').classList.add('show'), 200);
+            const music = document.getElementById('music');
+            if (music) music.volume = 0.35;
+        }
+    }, 48);
+}
+
+window.startTest = startTest;
+</script>
+<!-- Подключаем лёгкую html2canvas для снимка экрана -->
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</body>
+</html>
