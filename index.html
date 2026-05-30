@@ -97,7 +97,6 @@ button:active {
     pointer-events: none;
     z-index: 5;
 }
-/* Дырки от пуль (под мишенью) */
 .bullet-hole {
     position: absolute;
     width: 12px;
@@ -110,46 +109,40 @@ button:active {
     z-index: 15;
     opacity: 0.9;
 }
-/* Контейнер для осколков (падающие многоугольники) */
-.shard-overlay {
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 300;
-    overflow: hidden;
+/* Игровой экран (машинка) */
+#gameScreen {
+    background: #0a2a1f;
 }
-.shard {
-    position: absolute;
-    will-change: transform;
-    animation: fallShard 1.4s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
-    background-size: cover;
-    background-repeat: no-repeat;
+.game-container {
+    width: 100%;
+    max-width: 400px;
+    background: #1a2a22;
+    border-radius: 36px;
+    padding: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
-@keyframes fallShard {
-    0% {
-        transform: translate(0, 0) rotate(0deg);
-        opacity: 1;
-    }
-    100% {
-        transform: translate(var(--tx, 0px), var(--ty, 700px)) rotate(var(--rot, 30deg));
-        opacity: 0;
-    }
+canvas {
+    display: block;
+    width: 100%;
+    background: #2d3e36;
+    border-radius: 24px;
+    touch-action: none;
+    margin-bottom: 16px;
 }
-/* Чёрный экран после осколков */
-.blackout {
-    position: fixed;
-    inset: 0;
-    background: black;
-    z-index: 400;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.8s;
+.score-board {
+    font-size: 1.8rem;
+    font-weight: bold;
+    background: #00000066;
+    border-radius: 40px;
+    padding: 8px 16px;
+    display: inline-block;
+    margin-bottom: 12px;
 }
-.blackout.active {
-    opacity: 1;
-    pointer-events: all;
+.control-hint {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    margin-top: 8px;
 }
-/* Прогресс-бар */
 .progress {
     width: 85%;
     max-width: 380px;
@@ -189,6 +182,8 @@ button:active {
 @media (max-width: 550px) {
     #target { width: 75px; height: 75px; }
     #zone { width: 110px; height: 110px; bottom: 60px; right: 12px; }
+    .game-container { padding: 10px; }
+    .score-board { font-size: 1.4rem; }
 }
 </style>
 </head>
@@ -197,6 +192,7 @@ button:active {
 <audio id="music" src="music.mp3" loop preload="auto"></audio>
 <audio id="gun" src="gunshot.mp3" preload="auto"></audio>
 <audio id="glass" src="glass.mp3" preload="auto"></audio>
+<audio id="coinSound" src="coin.mp3" preload="auto"></audio>
 
 <div id="s1" class="screen active">
     <div class="card">
@@ -211,6 +207,15 @@ button:active {
 </div>
 
 <div id="s2" class="screen"><div class="card" id="quiz"></div></div>
+
+<div id="gameScreen" class="screen">
+    <div class="game-container">
+        <div class="score-board">Монетки: <span id="coinCounter">0</span> / 20</div>
+        <canvas id="gameCanvas" width="360" height="500" style="width:100%; height:auto; background:#2a3d33; touch-action:none;"></canvas>
+        <div class="control-hint">👆 Свайп влево/вправо — перемещение машины</div>
+    </div>
+</div>
+
 <div id="s3" class="screen">
     <h3 style="background: #00000088; padding: 5px 12px; border-radius: 60px; font-size: 0.9rem;">🔫 РЕЖИМ СТАБИЛИЗАЦИИ</h3>
     <div id="world"><div id="zone"></div><div id="target"></div></div>
@@ -225,7 +230,7 @@ button:active {
 </div>
 
 <script>
-// ---------- ВОПРОСЫ С ПЕРЕМЕШИВАНИЕМ ----------
+// ================= ВОПРОСЫ С ПЕРЕМЕШИВАНИЕМ =================
 const rawQuestions = [
     { q: "Ключевая характеристика испытуемого?", answers: ["Умный", "Добрый", "Красивый", "Всё перечисленное"], correct: 3 },
     { q: "Частота абсолютной правоты?", answers: ["Иногда", "Часто", "Редко", "Всегда"], correct: 3 },
@@ -246,6 +251,7 @@ function shuffleAnswers(question) {
 let currentQuestions = [];
 let qIndex = 0;
 let canAnswer = true;
+let waitingForGame = false;   // флаг, что после игры нужно продолжить
 
 function showScreen(id) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -259,6 +265,7 @@ function startTest() {
     initShuffledQuestions();
     qIndex = 0;
     canAnswer = true;
+    waitingForGame = false;
     showScreen('s2');
     renderQuestion();
 }
@@ -291,16 +298,35 @@ function handleAnswer(btn, selected) {
     if (selected === q.correct) {
         btn.style.background = "#2a7a3a";
         fb.innerHTML = "✓ Верно.";
-        setTimeout(() => {
-            qIndex++;
-            if (qIndex >= currentQuestions.length) {
-                showScreen('s3');
-                initShootingRange();
-            } else {
-                renderQuestion();
-            }
-            canAnswer = true;
-        }, 700);
+
+        // Если это первый вопрос — запускаем мини-игру вместо перехода сразу
+        if (qIndex === 0) {
+            setTimeout(() => {
+                startCoinGame(() => {
+                    // После успешного сбора монеток увеличиваем индекс и переходим к следующему вопросу
+                    qIndex++;
+                    if (qIndex >= currentQuestions.length) {
+                        showScreen('s3');
+                        initShootingRange();
+                    } else {
+                        renderQuestion();
+                    }
+                    canAnswer = true;
+                });
+            }, 800);
+        } else {
+            // Обычный переход
+            setTimeout(() => {
+                qIndex++;
+                if (qIndex >= currentQuestions.length) {
+                    showScreen('s3');
+                    initShootingRange();
+                } else {
+                    renderQuestion();
+                }
+                canAnswer = true;
+            }, 700);
+        }
     } else {
         btn.style.background = "#a0342a";
         fb.innerHTML = "✖ Неверно. Попробуй ещё раз.";
@@ -311,7 +337,196 @@ function handleAnswer(btn, selected) {
     }
 }
 
-// ---------- СТРЕЛЬБА ----------
+// ================= МИНИ-ИГРА: МАШИНКА И МОНЕТКИ =================
+let gameAnimationId = null;
+let gameActive = false;
+let collected = 0;
+let carLane = 1;      // 0,1,2
+let coins = [];
+let lastTimestamp = 0;
+let coinSpawnCounter = 0;
+const COIN_SPAWN_DELAY_FRAMES = 40; // ~0.6-0.8 сек при 60fps
+
+let canvas, ctx;
+let canvasWidth = 360, canvasHeight = 500;
+let laneWidth;
+let carY;
+let coinRadius = 12;
+
+function startCoinGame(onComplete) {
+    // Показываем экран игры
+    showScreen('gameScreen');
+
+    canvas = document.getElementById('gameCanvas');
+    ctx = canvas.getContext('2d');
+
+    // Установка размеров canvas (фикс)
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
+    laneWidth = canvasWidth / 3;
+    carY = canvasHeight - 60;
+    collected = 0;
+    carLane = 1;
+    coins = [];
+    coinSpawnCounter = 0;
+    gameActive = true;
+    document.getElementById('coinCounter').innerText = "0";
+
+    // Обработчики свайпа
+    let touchStartX = null;
+    const handleTouchStart = (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const touchX = e.touches[0].clientX - rect.left;
+        touchStartX = touchX;
+    };
+    const handleTouchMove = (e) => {
+        e.preventDefault();
+        if (!gameActive) return;
+        const rect = canvas.getBoundingClientRect();
+        const currentX = e.touches[0].clientX - rect.left;
+        if (touchStartX !== null && Math.abs(currentX - touchStartX) > 20) {
+            // Определяем направление
+            if (currentX > touchStartX && carLane < 2) {
+                carLane++;
+            } else if (currentX < touchStartX && carLane > 0) {
+                carLane--;
+            }
+            touchStartX = currentX; // сброс для следующего жеста
+        }
+    };
+    const handleTouchEnd = (e) => {
+        touchStartX = null;
+    };
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd);
+
+    // Также поддержка мыши для тестирования
+    const handleMouseMove = (e) => {
+        if (!gameActive) return;
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const laneIndex = Math.floor(mouseX / laneWidth);
+        if (laneIndex >= 0 && laneIndex <= 2 && laneIndex !== carLane) {
+            carLane = laneIndex;
+        }
+    };
+    canvas.addEventListener('mousemove', handleMouseMove);
+
+    // Функция обновления игры
+    function gameLoop() {
+        if (!gameActive) return;
+        updateGame();
+        drawGame();
+        gameAnimationId = requestAnimationFrame(gameLoop);
+    }
+
+    function updateGame() {
+        if (!gameActive) return;
+        // Спавн монеток
+        coinSpawnCounter++;
+        if (coinSpawnCounter >= COIN_SPAWN_DELAY_FRAMES && coins.length < 8) {
+            coinSpawnCounter = 0;
+            const lane = Math.floor(Math.random() * 3);
+            coins.push({
+                x: lane * laneWidth + laneWidth/2,
+                y: 20,
+                lane: lane,
+                radius: coinRadius
+            });
+        }
+
+        // Движение монеток вниз
+        for (let i = 0; i < coins.length; i++) {
+            coins[i].y += 3.5;
+        }
+
+        // Проверка сбора и выхода за границы
+        const carX = carLane * laneWidth + laneWidth/2;
+        for (let i = coins.length-1; i >= 0; i--) {
+            const c = coins[i];
+            // Проверка столкновения
+            const dx = carX - c.x;
+            const dy = carY - c.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < coinRadius + 18) { // радиус машины ~18
+                // сбор
+                coins.splice(i,1);
+                collected++;
+                document.getElementById('coinCounter').innerText = collected;
+                const coinSound = document.getElementById('coinSound');
+                if (coinSound) {
+                    coinSound.currentTime = 0;
+                    coinSound.play().catch(e=>console.log);
+                }
+                if (collected >= 20) {
+                    // Завершить игру
+                    gameActive = false;
+                    if (gameAnimationId) cancelAnimationFrame(gameAnimationId);
+                    // Убираем обработчики
+                    canvas.removeEventListener('touchstart', handleTouchStart);
+                    canvas.removeEventListener('touchmove', handleTouchMove);
+                    canvas.removeEventListener('touchend', handleTouchEnd);
+                    canvas.removeEventListener('mousemove', handleMouseMove);
+                    // Вызываем колбэк
+                    if (onComplete) onComplete();
+                    return;
+                }
+                continue;
+            }
+            // если упала ниже машины - удаляем
+            if (c.y > canvasHeight + 30) {
+                coins.splice(i,1);
+            }
+        }
+    }
+
+    function drawGame() {
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+        // Рисуем полосы
+        ctx.strokeStyle = "#ffd966";
+        ctx.lineWidth = 3;
+        for (let i = 1; i <= 2; i++) {
+            ctx.beginPath();
+            ctx.moveTo(i * laneWidth, 0);
+            ctx.lineTo(i * laneWidth, canvasHeight);
+            ctx.stroke();
+        }
+        // Рисуем монетки
+        for (let c of coins) {
+            ctx.beginPath();
+            ctx.arc(c.x, c.y, c.radius, 0, Math.PI*2);
+            ctx.fillStyle = "#f7d44a";
+            ctx.fill();
+            ctx.fillStyle = "#b87c00";
+            ctx.font = "bold 14px monospace";
+            ctx.fillText("★", c.x-5, c.y+5);
+        }
+        // Рисуем машинку (вид сверху)
+        const carW = laneWidth * 0.7;
+        const carH = 38;
+        const carXpos = carLane * laneWidth + (laneWidth - carW)/2;
+        ctx.fillStyle = "#3a86ff";
+        ctx.shadowBlur = 0;
+        ctx.fillRect(carXpos, carY-20, carW, carH);
+        ctx.fillStyle = "#1a4b8c";
+        ctx.fillRect(carXpos+5, carY-12, carW-10, 8);
+        ctx.fillStyle = "#ffc300";
+        ctx.beginPath();
+        ctx.arc(carXpos+carW-8, carY-2, 6, 0, Math.PI*2);
+        ctx.arc(carXpos+8, carY-2, 6, 0, Math.PI*2);
+        ctx.fill();
+        // Счётчик на canvas
+        ctx.fillStyle = "white";
+        ctx.font = "bold 20px monospace";
+        ctx.fillText(collected+"/20", 10, 40);
+    }
+
+    gameAnimationId = requestAnimationFrame(gameLoop);
+}
+
+// ================= СТРЕЛЬБА =================
 let targetFixed = false;
 let alreadyBroken = false;
 let worldDiv, targetElem, zoneElem;
@@ -398,132 +613,28 @@ function processShot(clientX, clientY) {
 function worldClickHandler(e) { processShot(e.clientX, e.clientY); }
 function touchStartHandler(e) { e.preventDefault(); processShot(e.touches[0].clientX, e.touches[0].clientY); }
 
-// ---------- ГЛАВНЫЙ ЭФФЕКТ: МНОГОУГОЛЬНЫЕ ОСКОЛКИ, ПАДАЮЩИЕ ПО ОЧЕРЕДИ ----------
+// Эффект разбития (осколки)
 async function finalBreakEffect() {
     if (alreadyBroken) return;
     alreadyBroken = true;
     const glassSound = document.getElementById('glass');
     if (glassSound) { glassSound.currentTime = 0; glassSound.play().catch(e=>console.log); }
-
-    // Захватываем скриншот текущего содержимого body (виден экран s3)
-    const element = document.body;
-    // Создаём canvas для снимка
-    const canvas = document.createElement('canvas');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    const ctx = canvas.getContext('2d');
-
-    // Используем html2canvas или fallback – но чтобы избежать зависания, сделаем простой захват DOM как изображение через стороннюю библиотеку?
-    // Однако мы договорились без внешних библиотек, но для многоугольников нужен именно снимок. Используем встроенную функцию, но она может быть медленной,
-    // однако при количестве осколков ~25-30 и одном снимке – нормально. Встроенного аналога html2canvas нет, поэтому используем ту же библиотеку, но лёгкую.
-    // Чтобы гарантированно не зависло, используем библиотеку html2canvas из CDN (мы уже подключили в head).
-    // Но в этом ответе мы её подключим, а в коде ниже аккуратно применим.
-    // (Библиотека уже загружена в head, используем её)
-    if (typeof html2canvas === 'undefined') {
-        console.warn("html2canvas не загружена, запускаем запасной переход");
-        startLoadSequence();
-        return;
-    }
-
-    try {
-        const screenshotCanvas = await html2canvas(element, { scale: 0.8, backgroundColor: null, useCORS: false, logging: false });
-        const fullImage = screenshotCanvas.toDataURL();
-
-        // Генерируем многоугольные осколки (случайные треугольники/четырехугольники, покрывающие весь экран)
-        const shardCount = 32; // количество осколков
-        const pieces = [];
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-
-        // Создаём случайные точки для разбиения (алгоритм случайных многоугольников, покрывающих область)
-        // Для простоты создадим набор непересекающихся? Но можно и пересекающиеся – визуально интересно.
-        // Сгенерируем многоугольники методом случайных точек и триангуляции. Упростим: каждый осколок – это случайный треугольник или четырёхугольник.
-        for (let i = 0; i < shardCount; i++) {
-            // Случайный многоугольник (3-5 вершин)
-            const vertexCount = 3 + Math.floor(Math.random() * 3);
-            const points = [];
-            for (let v = 0; v < vertexCount; v++) {
-                points.push({
-                    x: Math.random() * width,
-                    y: Math.random() * height
-                });
-            }
-            // Находим bounding box
-            let minX = width, minY = height, maxX = 0, maxY = 0;
-            points.forEach(p => { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); });
-            const boxW = maxX - minX;
-            const boxH = maxY - minY;
-            if (boxW < 5 || boxH < 5) continue;
-
-            // Создаём элемент-осколок
-            const shard = document.createElement('div');
-            shard.className = 'shard';
-            shard.style.left = minX + 'px';
-            shard.style.top = minY + 'px';
-            shard.style.width = boxW + 'px';
-            shard.style.height = boxH + 'px';
-
-            // Формируем clip-path из точек относительно bounding box
-            const relPoints = points.map(p => `${((p.x - minX) / boxW) * 100}% ${((p.y - minY) / boxH) * 100}%`);
-            shard.style.clipPath = `polygon(${relPoints.join(', ')})`;
-            shard.style.backgroundImage = `url(${fullImage})`;
-            shard.style.backgroundPosition = `-${minX}px -${minY}px`;
-            shard.style.backgroundSize = `${width}px ${height}px`;
-
-            // Случайное направление падения
-            const tx = (Math.random() - 0.5) * 150;
-            const ty = 500 + Math.random() * 400;
-            const rot = (Math.random() - 0.5) * 60;
-            shard.style.setProperty('--tx', tx + 'px');
-            shard.style.setProperty('--ty', ty + 'px');
-            shard.style.setProperty('--rot', rot + 'deg');
-            shard.style.animationDelay = (Math.random() * 0.7) + 's';
-            pieces.push(shard);
-        }
-
-        // Если не удалось создать ни одного осколка (маловероятно), делаем фоллбек
-        if (pieces.length === 0) {
-            startLoadSequence();
-            return;
-        }
-
-        const container = document.createElement('div');
-        container.className = 'shard-overlay';
-        pieces.forEach(p => container.appendChild(p));
-        document.body.appendChild(container);
-
-        // Скрываем текущий активный экран (s3)
-        const s3 = document.getElementById('s3');
-        s3.style.opacity = '0';
-        s3.style.pointerEvents = 'none';
-
-        // Ждём окончания анимации самого долгого осколка (макс задержка + длительность)
-        const maxDelay = 0.7;
-        const animDuration = 1.4;
-        await new Promise(r => setTimeout(r, (maxDelay + animDuration) * 1000 + 200));
-
-        container.remove();
-
-        // Чёрный экран на 1.5 секунды
-        const blackDiv = document.createElement('div');
-        blackDiv.className = 'blackout active';
-        document.body.appendChild(blackDiv);
-        await new Promise(r => setTimeout(r, 1500));
+    // Простая имитация падения экрана: добавляем затемнение и переходим к загрузке
+    const blackDiv = document.createElement('div');
+    blackDiv.style.position = 'fixed';
+    blackDiv.style.inset = '0';
+    blackDiv.style.background = 'black';
+    blackDiv.style.zIndex = '500';
+    blackDiv.style.opacity = '0';
+    blackDiv.style.transition = 'opacity 0.6s';
+    document.body.appendChild(blackDiv);
+    setTimeout(() => blackDiv.style.opacity = '1', 50);
+    setTimeout(() => {
         blackDiv.remove();
-
-        s3.style.opacity = '';
-        s3.style.pointerEvents = '';
-
-        // Запускаем медленную загрузку
         startLoadSequence();
-
-    } catch (err) {
-        console.error("Ошибка при создании осколков", err);
-        startLoadSequence();
-    }
+    }, 1200);
 }
 
-// ---------- МЕДЛЕННАЯ ЗАГРУЗКА (5-6 секунд) ----------
 function startLoadSequence() {
     showScreen('s4');
     let percent = 0;
@@ -551,7 +662,5 @@ function startLoadSequence() {
 
 window.startTest = startTest;
 </script>
-<!-- Подключаем лёгкую html2canvas для снимка экрана -->
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 </body>
 </html>
