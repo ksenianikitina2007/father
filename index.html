@@ -235,6 +235,82 @@ canvas {
     padding: 14px 20px;
     font-size: 1.25rem;
 }
+
+.glass-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    pointer-events: none;
+    overflow: hidden;
+}
+.glass-flash {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(255,255,255,0.16), rgba(190,220,255,0.08) 16%, rgba(0,0,0,0.02) 44%, rgba(0,0,0,0) 72%);
+    opacity: 0;
+    animation: glassFlash 0.24s ease-out forwards;
+}
+.glass-crack-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+.crack-line {
+    fill: none;
+    stroke: rgba(235, 245, 255, 0.96);
+    stroke-width: 1.35;
+    stroke-linecap: round;
+    opacity: 0;
+    filter: drop-shadow(0 0 3px rgba(255,255,255,0.35));
+}
+.impact-ring {
+    fill: none;
+    stroke: rgba(255,255,255,0.95);
+    stroke-width: 2.2;
+    opacity: 0;
+    transform-origin: center;
+    animation: impactPulse 0.55s ease-out forwards;
+}
+.glass-shard {
+    position: absolute;
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.18), rgba(190,215,255,0.06) 38%, rgba(255,255,255,0.12) 100%),
+        rgba(160, 205, 255, 0.05);
+    border: 1px solid rgba(220, 240, 255, 0.34);
+    box-shadow: inset 0 0 20px rgba(255,255,255,0.05), 0 0 8px rgba(180,220,255,0.08);
+    backdrop-filter: blur(0.6px);
+    opacity: 0;
+    will-change: transform, opacity;
+}
+@keyframes crackGrow {
+    0% { stroke-dashoffset: var(--dash); opacity: 0; }
+    12% { opacity: 1; }
+    100% { stroke-dashoffset: 0; opacity: 1; }
+}
+@keyframes glassFlash {
+    0% { opacity: 0; }
+    25% { opacity: 1; }
+    100% { opacity: 0; }
+}
+@keyframes impactPulse {
+    0% { opacity: 0.95; transform: scale(0.15); }
+    100% { opacity: 0; transform: scale(2.2); }
+}
+@keyframes shardFall {
+    0% {
+        opacity: 0;
+        transform: translate(0, 0) rotate(0deg) scale(1);
+    }
+    12% {
+        opacity: 0.96;
+    }
+    100% {
+        opacity: 0;
+        transform: translate(var(--tx), var(--ty)) rotate(var(--rot)) scale(0.9);
+    }
+}
+
 @media (max-width: 550px) {
     #target { width: 75px; height: 75px; }
     #zone { width: 110px; height: 110px; bottom: 60px; right: 12px; }
@@ -643,7 +719,7 @@ function processShot(clientX, clientY) {
     if (!isHit) return;
 
     if (targetFixed) {
-        if (!alreadyBroken) finalBreakEffect();
+        if (!alreadyBroken) finalBreakEffect(clientX, clientY);
         return;
     }
 
@@ -663,25 +739,146 @@ function processShot(clientX, clientY) {
 function worldClickHandler(e) { processShot(e.clientX, e.clientY); }
 function touchStartHandler(e) { e.preventDefault(); processShot(e.touches[0].clientX, e.touches[0].clientY); }
 
-async function finalBreakEffect() {
+
+function randomBetween(min, max) {
+    return min + Math.random() * (max - min);
+}
+
+function createCrackLine(svg, x1, y1, x2, y2, delay, widthMult = 1) {
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1.toFixed(1));
+    line.setAttribute('y1', y1.toFixed(1));
+    line.setAttribute('x2', x2.toFixed(1));
+    line.setAttribute('y2', y2.toFixed(1));
+    const dash = Math.max(8, Math.hypot(x2 - x1, y2 - y1));
+    line.setAttribute('class', 'crack-line');
+    line.style.strokeDasharray = dash.toFixed(1);
+    line.style.strokeDashoffset = dash.toFixed(1);
+    line.style.setProperty('--dash', dash.toFixed(1));
+    line.style.strokeWidth = (1.05 * widthMult).toFixed(2);
+    line.style.animation = `crackGrow ${Math.min(220, Math.max(110, dash * 1.45))}ms ease-out ${delay}ms forwards`;
+    svg.appendChild(line);
+}
+
+function generateGlassCracks(svg, impactX, impactY, width, height) {
+    const baseRays = 12;
+    const maxRadius = Math.max(width, height) * 0.7;
+
+    const ring = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    ring.setAttribute('cx', impactX.toFixed(1));
+    ring.setAttribute('cy', impactY.toFixed(1));
+    ring.setAttribute('r', '16');
+    ring.setAttribute('class', 'impact-ring');
+    svg.appendChild(ring);
+
+    for (let i = 0; i < baseRays; i++) {
+        let angle = (Math.PI * 2 * i / baseRays) + randomBetween(-0.16, 0.16);
+        let x = impactX;
+        let y = impactY;
+        let traveled = 0;
+        const segments = Math.floor(randomBetween(4, 7));
+
+        for (let s = 0; s < segments; s++) {
+            const segLen = randomBetween(35, 88);
+            const nextX = x + Math.cos(angle) * segLen;
+            const nextY = y + Math.sin(angle) * segLen;
+            const delay = Math.round(45 + traveled * 1.25);
+            createCrackLine(svg, x, y, nextX, nextY, delay, s === 0 ? 1.45 : 1);
+
+            if (Math.random() < 0.62) {
+                const branchAngle = angle + randomBetween(-1.0, 1.0);
+                const branchLen = segLen * randomBetween(0.35, 0.7);
+                const bx = nextX + Math.cos(branchAngle) * branchLen;
+                const by = nextY + Math.sin(branchAngle) * branchLen;
+                createCrackLine(svg, nextX, nextY, bx, by, delay + 70, 0.8);
+            }
+
+            x = nextX;
+            y = nextY;
+            traveled += segLen;
+            angle += randomBetween(-0.26, 0.26);
+            if (traveled > maxRadius || x < -40 || x > width + 40 || y < -40 || y > height + 40) {
+                break;
+            }
+        }
+    }
+}
+
+function createGlassShards(overlay, impactX, impactY, width, height) {
+    const cols = Math.max(4, Math.round(width / 120));
+    const rows = Math.max(6, Math.round(height / 120));
+    const tileW = width / cols;
+    const tileH = height / rows;
+
+    for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+            const shard = document.createElement('div');
+            shard.className = 'glass-shard';
+            const left = col * tileW;
+            const top = row * tileH;
+            shard.style.left = left + 'px';
+            shard.style.top = top + 'px';
+            shard.style.width = (tileW + 1) + 'px';
+            shard.style.height = (tileH + 1) + 'px';
+            shard.style.clipPath = `polygon(${randomBetween(0,14)}% ${randomBetween(0,16)}%, ${randomBetween(78,100)}% ${randomBetween(0,14)}%, ${randomBetween(84,100)}% ${randomBetween(76,100)}%, ${randomBetween(0,18)}% ${randomBetween(82,100)}%)`;
+
+            const centerX = left + tileW / 2;
+            const centerY = top + tileH / 2;
+            const awayX = (centerX - impactX) / width;
+            const awayY = (centerY - impactY) / height;
+            const tx = awayX * randomBetween(25, 120);
+            const ty = randomBetween(180, 340) + Math.abs(awayY) * 120;
+            const rot = randomBetween(-28, 28) + awayX * 18;
+            const delay = Math.round(620 + Math.hypot(centerX - impactX, centerY - impactY) * 0.34 + randomBetween(0, 110));
+            const duration = Math.round(randomBetween(850, 1300));
+
+            shard.style.setProperty('--tx', tx.toFixed(1) + 'px');
+            shard.style.setProperty('--ty', ty.toFixed(1) + 'px');
+            shard.style.setProperty('--rot', rot.toFixed(1) + 'deg');
+            shard.style.animation = `shardFall ${duration}ms cubic-bezier(0.2, 0.75, 0.22, 1) ${delay}ms forwards`;
+            overlay.appendChild(shard);
+        }
+    }
+}
+
+async function finalBreakEffect(clientX, clientY) {
     if (alreadyBroken) return;
     alreadyBroken = true;
-    const glassSound = document.getElementById('glass');
-    if (glassSound) { glassSound.currentTime = 0; glassSound.play().catch(e=>console.log); }
 
-    const blackDiv = document.createElement('div');
-    blackDiv.style.position = 'fixed';
-    blackDiv.style.inset = '0';
-    blackDiv.style.background = 'black';
-    blackDiv.style.zIndex = '500';
-    blackDiv.style.opacity = '0';
-    blackDiv.style.transition = 'opacity 0.6s';
-    document.body.appendChild(blackDiv);
-    setTimeout(() => blackDiv.style.opacity = '1', 50);
+    worldDiv.removeEventListener('click', worldClickHandler);
+    worldDiv.removeEventListener('touchstart', touchStartHandler);
+
+    const glassSound = document.getElementById('glass');
+    if (glassSound) {
+        glassSound.currentTime = 0;
+        glassSound.play().catch(e => console.log);
+    }
+
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const overlay = document.createElement('div');
+    overlay.className = 'glass-overlay';
+
+    const flash = document.createElement('div');
+    flash.className = 'glass-flash';
+    flash.style.background = `radial-gradient(circle at ${clientX}px ${clientY}px, rgba(255,255,255,0.2), rgba(200,225,255,0.12) 14%, rgba(0,0,0,0.03) 42%, rgba(0,0,0,0) 72%)`;
+    overlay.appendChild(flash);
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'glass-crack-svg');
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    overlay.appendChild(svg);
+
+    document.body.appendChild(overlay);
+
+    generateGlassCracks(svg, clientX, clientY, width, height);
+    setTimeout(() => createGlassShards(overlay, clientX, clientY, width, height), 160);
+
     setTimeout(() => {
-        blackDiv.remove();
+        overlay.remove();
         if (shootingCompleteCallback) shootingCompleteCallback();
-    }, 1200);
+    }, 2350);
 }
 
 // Финальная загрузка (медленная)
