@@ -230,6 +230,23 @@ canvas {
     opacity: 1;
     transform: scale(1);
 }
+.photo-fallback {
+    display: none;
+    width: 80%;
+    max-width: 320px;
+    margin: 20px 0;
+    padding: 22px 16px;
+    border-radius: 32px;
+    border: 2px dashed #ffcc77;
+    background: #11161fcc;
+    color: #ffe2a8;
+    font-size: 1rem;
+    line-height: 1.35;
+}
+.photo-fallback.show {
+    display: block;
+}
+
 #s5 p {
     background: #11161fcc;
     backdrop-filter: blur(12px);
@@ -456,13 +473,24 @@ canvas {
 
 
 .main-title {
-    font-size: clamp(1.02rem, 4.7vw, 1.28rem);
+    font-size: clamp(1.35rem, 6.2vw, 1.75rem);
     border-bottom: 1px solid #2e4a6e;
-    display: inline-block;
-    padding-bottom: 6px;
-    transform: translateX(-10px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding-bottom: 8px;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 100%;
+    text-align: center;
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+}
+.main-title span {
+    display: block;
     white-space: nowrap;
-    letter-spacing: -0.04em;
 }
 .profile-line {
     display: flex;
@@ -484,7 +512,7 @@ canvas {
 }
 @media (max-width: 370px) {
     .card { padding: 24px 14px; }
-    .main-title { font-size: 0.98rem; transform: translateX(-12px); }
+    .main-title { font-size: 1.22rem; }
     .profile-line { font-size: 0.98rem; gap: 5px; }
     .score-board { font-size: 1.15rem; padding-left: 14px; padding-right: 14px; }
 }
@@ -502,11 +530,10 @@ canvas {
 <audio id="music" src="music.mp3" loop preload="auto"></audio>
 <audio id="gun" src="gunshot.mp3" preload="auto"></audio>
 <audio id="glass" src="glass.mp3" preload="auto"></audio>
-<audio id="coinSound" src="coin.mp3" preload="auto"></audio>
 
 <div id="s1" class="screen active">
     <div class="card">
-        <h2 class="main-title">⚙️ КВАЛИФИКАЦИОННОЕ ИСПЫТАНИЕ</h2>
+        <h2 class="main-title"><span>⚙️ КВАЛИФИКАЦИОННОЕ</span><span>ИСПЫТАНИЕ</span></h2>
         <div style="background: #0c111c; border-radius: 24px; padding: 18px; margin: 22px 0; text-align: left; border: 1px solid #2e4a6e;">
             <p class="profile-line"><span>👤</span> <strong class="profile-label">Испытуемый:</strong> <span class="profile-value">Папа Дима</span></p>
             <p style="font-size: 1.2rem; margin: 8px 0;">📅 <strong>Дата создания:</strong> 1979</p>
@@ -545,7 +572,8 @@ canvas {
 <div id="s5" class="screen">
     <h1 style="font-size: 2.4rem;">✅ ПРОВЕРКА ПРОЙДЕНА</h1>
     <h2 class="final-birthday">С ДНЁМ РОЖДЕНИЯ,<br>ПАПА ДИМА</h2>
-    <img id="photo" src="photo.jpg" alt="Папа Дима">
+    <img id="photo" src="photo.jpg" alt="Папа Дима" onerror="showPhotoFallback()">
+    <div id="photoFallback" class="photo-fallback">Фото не найдено.<br>Проверь, что <strong>photo.jpg</strong> лежит в той же папке, что и HTML.</div>
     <p>⭐ ЛУЧШИЙ ПАПА В МИРЕ ⭐<br><br>Мы тебя очень любим<br>и ценим каждый день</p>
 </div>
 
@@ -680,6 +708,47 @@ let laneWidth;
 let carY;
 let coinRadius = 12;
 
+function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+    const radius = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + w - radius, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+    ctx.lineTo(x + w, y + h - radius);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+    ctx.lineTo(x + radius, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    if (fill) ctx.fill();
+    if (stroke) ctx.stroke();
+}
+
+
+function playCoinBeep() {
+    // Отдельный coin.mp3 больше не нужен: короткий звук монетки создаётся прямо в браузере.
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const audioCtx = window.__coinAudioCtx || (window.__coinAudioCtx = new AudioCtx());
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1320, audioCtx.currentTime + 0.08);
+        gain.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.12, audioCtx.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.14);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.15);
+    } catch (e) {
+        // Если браузер блокирует звук — просто играем без звука монетки.
+    }
+}
+
 function startCoinGame(onComplete) {
     showScreen('gameScreen');
 
@@ -794,11 +863,7 @@ function startCoinGame(onComplete) {
                 coins.splice(i,1);
                 collected++;
                 document.getElementById('coinCounter').innerText = collected;
-                const coinSound = document.getElementById('coinSound');
-                if (coinSound) {
-                    coinSound.currentTime = 0;
-                    coinSound.play().catch(e=>console.log);
-                }
+                playCoinBeep();
                 if (collected >= 20) {
                     finishCoinGame();
                     return;
@@ -830,17 +895,31 @@ function startCoinGame(onComplete) {
             ctx.font = "bold 14px monospace";
             ctx.fillText("★", c.x-5, c.y+5);
         }
-        const carW = laneWidth * 0.7;
-        const carH = 38;
+        const carW = laneWidth * 0.46;
+        const carH = 86;
         const carXpos = carLane * laneWidth + (laneWidth - carW)/2;
+        const carYpos = carY - carH/2;
+
+        // Машинка сверху: высокая, а не плоская.
+        ctx.fillStyle = "#155bc9";
+        roundRect(ctx, carXpos, carYpos, carW, carH, 12, true, false);
         ctx.fillStyle = "#3a86ff";
-        ctx.fillRect(carXpos, carY-20, carW, carH);
-        ctx.fillStyle = "#1a4b8c";
-        ctx.fillRect(carXpos+5, carY-12, carW-10, 8);
-        ctx.fillStyle = "#ffc300";
+        roundRect(ctx, carXpos + 6, carYpos + 10, carW - 12, carH - 20, 10, true, false);
+        ctx.fillStyle = "#bfe7ff";
+        roundRect(ctx, carXpos + 9, carYpos + 15, carW - 18, 18, 6, true, false);
+        ctx.fillStyle = "#2870e6";
+        roundRect(ctx, carXpos + 12, carYpos + 47, carW - 24, 22, 7, true, false);
+
+        ctx.fillStyle = "#111827";
+        roundRect(ctx, carXpos - 5, carYpos + 20, 8, 22, 4, true, false);
+        roundRect(ctx, carXpos + carW - 3, carYpos + 20, 8, 22, 4, true, false);
+        roundRect(ctx, carXpos - 5, carYpos + 52, 8, 22, 4, true, false);
+        roundRect(ctx, carXpos + carW - 3, carYpos + 52, 8, 22, 4, true, false);
+
+        ctx.fillStyle = "#ffd447";
         ctx.beginPath();
-        ctx.arc(carXpos+carW-8, carY-2, 6, 0, Math.PI*2);
-        ctx.arc(carXpos+8, carY-2, 6, 0, Math.PI*2);
+        ctx.arc(carXpos + 10, carYpos + 8, 5, 0, Math.PI*2);
+        ctx.arc(carXpos + carW - 10, carYpos + 8, 5, 0, Math.PI*2);
         ctx.fill();
     }
 
@@ -1172,6 +1251,13 @@ async function finalBreakEffect(clientX, clientY) {
     }, 3900);
 }
 
+function showPhotoFallback() {
+    const photo = document.getElementById('photo');
+    const fallback = document.getElementById('photoFallback');
+    if (photo) photo.style.display = 'none';
+    if (fallback) fallback.classList.add('show');
+}
+
 // Финальная загрузка (медленная)
 function startLoadSequence() {
     showScreen('s4');
@@ -1199,6 +1285,7 @@ function startLoadSequence() {
 }
 
 window.startTest = startTest;
+window.showPhotoFallback = showPhotoFallback;
 </script>
 </body>
 </html>
