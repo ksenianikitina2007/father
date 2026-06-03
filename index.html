@@ -186,13 +186,15 @@ canvas {
     box-shadow: inset 0 0 35px rgba(0,0,0,0.35);
 }
 .score-board {
-    font-size: 1.8rem;
+    font-size: clamp(1.25rem, 5vw, 1.55rem);
     font-weight: bold;
     background: #00000066;
     border-radius: 40px;
     padding: 8px 16px;
     display: inline-block;
     margin-bottom: 12px;
+    white-space: nowrap;
+    max-width: 100%;
 }
 .control-hint {
     font-size: 0.8rem;
@@ -454,12 +456,13 @@ canvas {
 
 
 .main-title {
-    font-size: clamp(1.25rem, 6vw, 1.58rem);
+    font-size: clamp(1.02rem, 4.7vw, 1.28rem);
     border-bottom: 1px solid #2e4a6e;
     display: inline-block;
     padding-bottom: 6px;
-    transform: translateX(-6px);
+    transform: translateX(-10px);
     white-space: nowrap;
+    letter-spacing: -0.04em;
 }
 .profile-line {
     display: flex;
@@ -481,8 +484,9 @@ canvas {
 }
 @media (max-width: 370px) {
     .card { padding: 24px 14px; }
-    .main-title { font-size: 1.18rem; transform: translateX(-8px); }
+    .main-title { font-size: 0.98rem; transform: translateX(-12px); }
     .profile-line { font-size: 0.98rem; gap: 5px; }
+    .score-board { font-size: 1.15rem; padding-left: 14px; padding-right: 14px; }
 }
 
 @media (max-width: 550px) {
@@ -676,21 +680,6 @@ let laneWidth;
 let carY;
 let coinRadius = 12;
 
-function roundRect(ctx, x, y, width, height, radius) {
-    const r = Math.min(radius, width / 2, height / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + width - r, y);
-    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
-    ctx.lineTo(x + width, y + height - r);
-    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-    ctx.lineTo(x + r, y + height);
-    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
-}
-
 function startCoinGame(onComplete) {
     showScreen('gameScreen');
 
@@ -840,55 +829,19 @@ function startCoinGame(onComplete) {
             ctx.fillStyle = "#b87c00";
             ctx.font = "bold 14px monospace";
             ctx.fillText("★", c.x-5, c.y+5);
-            ctx.fillStyle = "rgba(255,255,255,0.9)";
-            ctx.font = "bold 9px monospace";
-            ctx.fillText("млн", c.x-10, c.y+22);
         }
-        const carW = laneWidth * 0.52;
-        const carH = 78;
+        const carW = laneWidth * 0.7;
+        const carH = 38;
         const carXpos = carLane * laneWidth + (laneWidth - carW)/2;
-        const carTop = carY - carH/2;
-
-        // Машинка сверху: кузов, стекло, капот, фары и колёса.
-        ctx.save();
-        ctx.shadowColor = "rgba(0,0,0,0.35)";
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetY = 5;
-        roundRect(ctx, carXpos, carTop, carW, carH, 14);
         ctx.fillStyle = "#3a86ff";
-        ctx.fill();
-        ctx.restore();
-
+        ctx.fillRect(carXpos, carY-20, carW, carH);
         ctx.fillStyle = "#1a4b8c";
-        roundRect(ctx, carXpos + carW*0.16, carTop + 14, carW*0.68, 22, 8);
-        ctx.fill();
-        ctx.fillStyle = "rgba(220,245,255,0.85)";
-        roundRect(ctx, carXpos + carW*0.22, carTop + 18, carW*0.56, 12, 5);
-        ctx.fill();
-
-        ctx.fillStyle = "#266bd1";
-        roundRect(ctx, carXpos + carW*0.18, carTop + 43, carW*0.64, 22, 8);
-        ctx.fill();
-
-        ctx.fillStyle = "#121820";
-        roundRect(ctx, carXpos - 5, carTop + 14, 8, 20, 4);
-        ctx.fill();
-        roundRect(ctx, carXpos + carW - 3, carTop + 14, 8, 20, 4);
-        ctx.fill();
-        roundRect(ctx, carXpos - 5, carTop + 47, 8, 20, 4);
-        ctx.fill();
-        roundRect(ctx, carXpos + carW - 3, carTop + 47, 8, 20, 4);
-        ctx.fill();
-
-        ctx.fillStyle = "#ffd95a";
+        ctx.fillRect(carXpos+5, carY-12, carW-10, 8);
+        ctx.fillStyle = "#ffc300";
         ctx.beginPath();
-        ctx.arc(carXpos + carW*0.25, carTop + 6, 5, 0, Math.PI*2);
-        ctx.arc(carXpos + carW*0.75, carTop + 6, 5, 0, Math.PI*2);
+        ctx.arc(carXpos+carW-8, carY-2, 6, 0, Math.PI*2);
+        ctx.arc(carXpos+8, carY-2, 6, 0, Math.PI*2);
         ctx.fill();
-
-        ctx.fillStyle = "white";
-        ctx.font = "bold 20px monospace";
-        ctx.fillText(collected+" млн / 20 млн", 10, 40);
     }
 
     gameAnimationId = requestAnimationFrame(gameLoop);
