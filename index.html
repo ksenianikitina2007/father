@@ -98,6 +98,37 @@ button:active {
     min-height: 48px;
     margin: 12px 0;
 }
+
+/* Экран тира: на телефоне оставляем место снизу под подсказку */
+#s3 {
+    padding: 14px 14px 16px;
+    gap: 10px;
+    overflow: hidden;
+}
+#s3 h3 {
+    flex: 0 0 auto;
+}
+#s3 #world {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: auto;
+}
+.shooting-hint {
+    flex: 0 0 auto;
+    margin-top: 0;
+    font-size: 13px;
+    line-height: 1.25;
+    background: #00000099;
+    padding: 8px 14px;
+    border-radius: 20px;
+    max-width: 420px;
+    width: fit-content;
+}
+@media (max-height: 680px) {
+    #s3 { padding: 10px 10px 12px; gap: 7px; }
+    #s3 h3 { font-size: 0.78rem !important; padding: 4px 10px !important; }
+    .shooting-hint { font-size: 12px; padding: 6px 10px; }
+}
 /* Тир */
 #world {
     position: relative;
@@ -566,7 +597,7 @@ canvas {
 <div id="s3" class="screen">
     <h3 style="background: #00000088; padding: 5px 12px; border-radius: 60px; font-size: 0.9rem;">🔫 РЕЖИМ СТАБИЛИЗАЦИИ</h3>
     <div id="world"><div id="zone"></div><div id="target"></div></div>
-    <p style="margin-top: 8px; font-size: 12px; background: #00000099; padding: 5px 12px; border-radius: 20px;">🎯 Попади по мишени</p>
+    <p class="shooting-hint">👆 Клик или тап — выстрел. Попади по мишени.</p>
 </div>
 <div id="s4" class="screen"><h2 id="txt">📡 ОБРАБОТКА РЕЗУЛЬТАТОВ...</h2><div class="progress"><div class="bar" id="bar"></div></div></div>
 <div id="s5" class="screen">
